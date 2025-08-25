@@ -7,3 +7,513 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+
+// ============================================================================
+// 1) ENUMY – PODSTAWOWE / UŻYTKOWNICY 
+// ============================================================================
+// ---------- Enums ----------
+enum Role {
+  CLIENT
+  SPECIALIST
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE                 // zwykłe, zweryfikowane konto
+  PENDING_EMAIL_VERIFY   // zarejestrowane, ale e-mail niepotwierdzony
+  SUSPENDED              // ew. do moderacji / blokady
+}
+
+enum Category {
+  CONSTRUCTION        // Budownictwo i remonty
+  INTERIOR            // Wykończenia i wyposażenie wnętrz
+  REPAIRS             // Serwis i naprawy
+  IT_TECH             // Usługi IT i technologie
+  HEALTH              // Usługi medyczne i opiekuńcze
+  EDUCATION           // Edukacja i szkolenia korepetycje
+  GARDENING           // Usługi ogrodnicze i terenowe
+  TRANSPORT           // Transport i logistyka
+  SPECIALIZED         // Usługi specjalistyczne (prawne, finansowe, notarialne itd.)
+}
+
+
+
+// ============================================================================
+// 2) MODELE – UŻYTKOWNIK, KONTA OAUTH, OPINIE, SPECJALIZACJE
+// ============================================================================
+
+// ---------- Modele ----------
+model User {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  email     String   @unique
+  name      String?
+  surname   String?
+  image     String?
+  role      Role     @default(CLIENT)
+
+  // Hasło tylko dla rejestracji / logowania przez e-mail.
+  // Dla OAuth (Google/Facebook) będzie null.
+  password  String?
+
+  // Weryfikacja e-maila
+  emailVerified DateTime?
+  status    UserStatus @default(PENDING_EMAIL_VERIFY)
+
+  // --- AKCEPTACJA POLITYKI PRYWATNOŚCI ---
+  acceptedPrivacyPolicy Boolean   @default(false)
+  acceptedPrivacyAt      DateTime?
+
+  accounts  Account[]
+  specialistProfile SpecialistProfile?
+  clientProfile     ClientProfile?
+
+  clientAds      ClientAd[]     
+  specialistAds  SpecialistAd[] 
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([emailVerified])
+}
+
+model Account {
+  id                 String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId             String  @db.ObjectId
+  type               String
+  provider           String
+  providerAccountId  String
+
+  // OAuth – minimalny zestaw tokenów do odświeżania sesji OAuth
+  refresh_token      String?
+  access_token       String?
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+// ---- Opinie / Profile ----
+model Review {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  specialistId String   @db.ObjectId
+  clientId     String   @db.ObjectId
+
+  rating       Int 
+  comment      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Moderacja
+  isHidden     Boolean  @default(false)
+  isReported   Boolean  @default(false)
+  reportReason String?
+  reportedAt   DateTime?
+  reportedById String?  @db.ObjectId
+
+  specialist   SpecialistProfile @relation(fields: [specialistId], references: [id])
+  client       ClientProfile     @relation(fields: [clientId], references: [id])
+
+  @@index([specialistId])
+  @@unique([specialistId, clientId])
+}
+
+// Konkretny zawód / usługa
+model Specialization {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String   // np. "Elektryk"
+  category    Category
+
+  // Kto świadczy tę specjalizację
+  specialists SpecialistSpecialization[]
+  skills          Skill[]
+  certifications  Certification[]
+
+  clientAds       ClientAd[]       
+  specialistAds   SpecialistAd[]  
+
+  @@unique([name, category])
+}
+
+// Relacja wiele-do-wielu (Specjalista ↔ Specjalizacja)
+model SpecialistSpecialization {
+  id                String             @id @default(auto()) @map("_id") @db.ObjectId
+  specialistId      String             @db.ObjectId
+  specializationId  String             @db.ObjectId
+
+  specialist        SpecialistProfile  @relation(fields: [specialistId], references: [id])
+  specialization    Specialization     @relation(fields: [specializationId], references: [id])
+
+  @@unique([specialistId, specializationId])
+  @@index([specializationId])
+}
+
+
+
+// ============================================================================
+// 3) ENUMY – DOSTĘPNOŚĆ, SUBSKRYPCJE, PLANY, ZATRUDNIENIE
+// ============================================================================
+enum AvailabilityType {
+  CUSTOM
+  UNSET
+}
+
+enum SubscriptionStatus {
+  NONE        
+  INCOMPLETE  // checkout nie dokończony / wymaga akcji
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+enum PlanTier {
+  STANDARD
+  PREMIUM
+}
+
+enum EmploymentType {
+  B2B
+  CONTRACT     // zlecenie / dzieło
+  FULL_TIME
+  PART_TIME
+  TEMPORARY
+}
+
+
+
+// ============================================================================
+// 4) MODELE – MIASTA / LOKALIZACJA
+// ============================================================================
+model City {
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  slug        String   @unique   // "to jest takie coś dla kompa szuka lodz zamiast Łódź a klient widzi z polskimi znakami"
+  lat         Float               // x
+  lng         Float               // y
+
+  specialists SpecialistProfile[]
+  clientAds     ClientAd[]       
+  specialistAds SpecialistAd[] 
+  @@index([name])
+}
+
+
+
+// ============================================================================
+// 5) SŁOWNIKI (zarządzane przez admina) – SKILLS / CERTIFICATIONS
+// ============================================================================
+
+model Skill {
+  id               String  @id @default(auto()) @map("_id") @db.ObjectId
+  name             String
+  slug             String  @unique
+  isActive         Boolean @default(true)
+  displayOrder     Int     @default(0)
+
+  specializationId String? @db.ObjectId
+  specialization   Specialization? @relation(fields: [specializationId], references: [id])
+  category         Category?
+
+  specialists      SpecialistSkill[]
+
+  @@index([specializationId])
+  @@index([category])
+  @@index([isActive])
+}
+
+model Certification {
+  id               String  @id @default(auto()) @map("_id") @db.ObjectId
+  name             String
+  slug             String  @unique
+  isActive         Boolean @default(true)
+  displayOrder     Int     @default(0)
+
+  specializationId String? @db.ObjectId
+  specialization   Specialization? @relation(fields: [specializationId], references: [id])
+  category         Category?
+
+  specialists      SpecialistCertification[]
+
+  @@index([specializationId])
+  @@index([category])
+  @@index([isActive])
+}
+
+/* Łączniki (Specjalista ↔ Skill/Certification) */
+
+model SpecialistSkill {
+  id            String            @id @default(auto()) @map("_id") @db.ObjectId
+  specialistId  String            @db.ObjectId
+  skillId       String            @db.ObjectId
+
+  specialist    SpecialistProfile @relation(fields: [specialistId], references: [id])
+  skill         Skill             @relation(fields: [skillId], references: [id])
+
+  @@unique([specialistId, skillId])
+  @@index([skillId])
+}
+
+model SpecialistCertification {
+  id               String            @id @default(auto()) @map("_id") @db.ObjectId
+  specialistId     String            @db.ObjectId
+  certificationId  String            @db.ObjectId
+
+  specialist       SpecialistProfile @relation(fields: [specialistId], references: [id])
+  certification    Certification     @relation(fields: [certificationId], references: [id])
+
+  @@unique([specialistId, certificationId])
+  @@index([certificationId])
+}
+
+
+
+// ============================================================================
+// 6) PROFIL SPECJALISTY – DANE PUBLICZNE, SUBSKRYPCJA, UMIEJĘTNOŚCI, LOKALIZACJA
+// ============================================================================
+model SpecialistProfile {
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String  @unique @db.ObjectId
+  user      User    @relation(fields: [userId], references: [id])
+
+  // --------- PUBLICZNE INFORMACJE ----------
+  title            String?
+  description      String?
+  gallery          String[]
+
+  companyName      String?
+  nip              String?   
+  experienceYears  Int?
+  locationBase     String[]        // (opcjonalny opis gdzie znajduje sie firma)
+  serviceArea      String?
+  isRemote         Boolean @default(false)
+  priceFrom        Int?  //Opcionalny cennik od 100 do 300zl?
+
+ // ----- PLAN / SUBSKRYPCJA -----
+  planTier             PlanTier           @default(STANDARD)
+  subscriptionStatus   SubscriptionStatus @default(NONE)
+  currentPeriodEnd     DateTime?          // data końca bieżącego okresu (z Stripe)
+  // Identyfikatory Stripe (opcjonalne, uzupełniane z webhooków)
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+
+  // --------- SKILLS / CERTS (wybierane z listy admina) ----------
+  // (ZAMIENIONO na relacje M:N poniżej)
+  skills            SpecialistSkill[]
+  OtherSkills          String? //Max x znaków niewidoczne dla wyszukiwania
+  certifications    SpecialistCertification[]
+  OtherCerftifications String? //Max x znaków niewidoczne dla wyszukiwania
+  specialistAds SpecialistAd[]
+  // --------- KONTAKT ----------
+  phone          String?
+  website        String?
+  facebookLink   String?
+  instagramLink  String?
+  linkedinLink   String?
+  tiktokLink     String?
+  youtubeLink    String?
+
+  // --------- LOKALIZACJA ----------
+  locationCityId String?   @db.ObjectId
+  locationCity   City?     @relation(fields: [locationCityId], references: [id])
+  radiusKm       Int?
+
+  // --------- DOSTĘPNOŚĆ ----------
+  availabilityType   AvailabilityType @default(UNSET)
+  availabilityWeekly Json?
+
+  // --------- WIDOCZNOŚĆ / STATYSTYKI ----------
+  isFeatured     Boolean @default(false)
+  viewsCount     Int     @default(0)
+
+  // --------- OPINIE / RELACJE ----------
+  reviewsCount       Int    @default(0)
+  reviewsAvgRating   Float  @default(0)
+  reviews            Review[]
+  specializations    SpecialistSpecialization[]
+
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isFeatured])
+  @@index([isRemote])
+  @@index([locationCityId])
+}
+
+
+
+// ============================================================================
+// 7) OGŁOSZENIA SPECJALISTÓW (RYNEK PRACY / WSPÓŁPRACA)
+// ============================================================================
+model SpecialistAd {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+
+  // Autor (użytkownik + profil specjalisty)
+  userId       String   @db.ObjectId
+  user         User     @relation(fields: [userId], references: [id])
+  specialistId String   @db.ObjectId
+  specialist   SpecialistProfile @relation(fields: [specialistId], references: [id])
+
+  // Treść
+  title        String                // np. "Szukam pomocnika elektryka"
+  description  String
+  images       String[]
+
+  // Lokalizacja
+  cityId       String?  @db.ObjectId
+  city         City?    @relation(fields: [cityId], references: [id])
+  isRemote     Boolean  @default(false)
+
+  // Warunki współpracy (dodatkowe pola dla specjalisty)
+  employmentType EmploymentType?
+  salaryFrom     Int?
+  salaryTo       Int?
+
+  // Taksonomia (opcjonalnie)
+  category         Category?
+  specializationId String? @db.ObjectId
+  specialization   Specialization? @relation(fields: [specializationId], references: [id])
+
+  // Kontakt
+  showProfileContact Boolean @default(true)
+  contactPhone       String?
+  contactEmail       String?
+
+  // Meta
+  status      AdStatus @default(ACTIVE)
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@index([cityId])
+  @@index([specializationId])
+  @@index([expiresAt])
+}
+
+
+
+// ============================================================================
+// 8) PROFIL KLIENTA
+// ============================================================================
+model ClientProfile {
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String  @unique @db.ObjectId
+  user      User    @relation(fields: [userId], references: [id])
+
+  // --- PUBLIC / KONTAKTOWE (opcjonalne) ---
+  phone       String?      
+  city        String?      // np. "Warszawa"
+  address     String?      // opcjonalny adres (prywatny - tylko do zleceń)
+  
+  // --- STATYSTYKI / OGŁOSZENIA ---
+  adsCount    Int     @default(0)    
+
+  // Opinie wystawione przez tego klienta innym specjalistom
+  reviews     Review[]
+
+  // Ogłoszenia klienta (NOWE)
+  clientAds   ClientAd[]
+
+  // --- WERYFIKACJA ---
+  isVerified  Boolean  @default(false)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+
+
+// ============================================================================
+// 9) BEZPIECZEŃSTWO – TOKENY (WERYFIKACJA E-MAILA, RESET HASŁA)
+// ============================================================================
+model VerificationToken {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  identifier String   // np. e-mail
+  token      String   @unique
+  expires    DateTime
+
+  createdAt  DateTime @default(now())
+
+  @@index([identifier])
+  @@index([expires])
+}
+
+// Token resetu hasła 
+model PasswordResetToken {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  identifier String  
+  token      String   @unique
+  expires    DateTime
+
+  usedAt     DateTime? 
+  createdAt  DateTime  @default(now())
+
+  @@index([identifier])
+  @@index([expires])
+}
+
+
+
+// ============================================================================
+// 10) OGŁOSZENIA KLIENTA (ZLECENIA) + ENUM STATUSU
+// ============================================================================
+/*
+//-----------------OGLOSZENIA  KLIENTA------------------------------------
+*/
+enum AdStatus {
+  ACTIVE
+  CLOSED
+  ARCHIVED
+}
+
+model ClientAd {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+
+  // Autor (użytkownik + profil klienta)
+  userId      String   @db.ObjectId
+  user        User     @relation(fields: [userId], references: [id])
+  clientId    String   @db.ObjectId
+  client      ClientProfile @relation(fields: [clientId], references: [id])
+
+  // Treść
+  title       String
+  description String
+  images      String[]
+
+  // Lokalizacja
+  cityId      String?  @db.ObjectId
+  city        City?    @relation(fields: [cityId], references: [id])
+  isRemote    Boolean  @default(false)
+
+  // Budżet
+  budgetFrom  Int?
+  budgetTo    Int?
+
+  // Taksonomia (opcjonalnie, pod lepsze filtrowanie)
+  category         Category?
+  specializationId String? @db.ObjectId
+  specialization   Specialization? @relation(fields: [specializationId], references: [id])
+
+  // Kontakt do tego ogłoszenia lub kontakt z profilu
+  showProfileContact Boolean @default(true)
+  contactPhone       String?
+  contactEmail       String?
+
+  // Meta (proste)
+  status      AdStatus @default(ACTIVE)
+  expiresAt   DateTime?   //now()+30d TTL w Mongo
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@index([cityId])
+  @@index([specializationId])
+  @@index([expiresAt])
+}
