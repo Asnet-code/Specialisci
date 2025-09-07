@@ -5,7 +5,7 @@ import { deleteAdAction, extendAdExpiryAction, updateAdStatusAction } from "../_
 export default async function AdminClientAdsPage({
   searchParams,
 }: {
-  searchParams: {
+  searchParams: Promise<{
     q?: string;
     status?: "ACTIVE" | "CLOSED" | "ARCHIVED" | string;
     remote?: "true" | "false" | string;
@@ -13,22 +13,23 @@ export default async function AdminClientAdsPage({
     dir?: "asc" | "desc" | string;
     page?: string;
     pageSize?: string;
-  };
+  }>;
 }) {
   await requireAdmin();
 
-  const q = (searchParams?.q ?? "").trim();
-  const status = (searchParams?.status ?? "").trim();
-  const remote = (searchParams?.remote ?? "").trim();
-  const sort = (searchParams?.sort ?? "createdAt") as
+  const sp = await searchParams;
+  const q = (sp?.q ?? "").trim();
+  const status = (sp?.status ?? "").trim();
+  const remote = (sp?.remote ?? "").trim();
+  const sort = (sp?.sort ?? "createdAt") as
     | "createdAt"
     | "expiresAt"
     | "status"
     | "budgetFrom"
     | "budgetTo";
-  const dir = (searchParams?.dir ?? "desc") as "asc" | "desc";
-  const page = Math.max(1, Number(searchParams?.page ?? 1));
-  const pageSize = Math.min(100, Math.max(1, Number(searchParams?.pageSize ?? 20)));
+  const dir = (sp?.dir ?? "desc") as "asc" | "desc";
+  const page = Math.max(1, Number(sp?.page ?? 1));
+  const pageSize = Math.min(100, Math.max(1, Number(sp?.pageSize ?? 20)));
   const skip = (page - 1) * pageSize;
 
   const where = {
@@ -65,7 +66,7 @@ export default async function AdminClientAdsPage({
     <div className="space-y-6">
       <h2 className="text-lg font-semibold">Ogłoszenia klientów</h2>
 
-      <Filters basePath="/admin/client-ads" searchParams={searchParams} />
+      <Filters basePath="/admin/client-ads" searchParams={sp} />
 
       <div className="overflow-x-auto rounded-2xl border border-white/10">
         <table className="w-full text-sm">
@@ -73,10 +74,10 @@ export default async function AdminClientAdsPage({
             <tr className="text-left">
               <Th label="Tytuł" />
               <Th label="Miasto" />
-              <Th label="Budżet" field="budgetFrom" searchParams={searchParams} />
-              <Th label="Status" field="status" searchParams={searchParams} />
-              <Th label="Utworzono" field="createdAt" searchParams={searchParams} />
-              <Th label="Wygasa" field="expiresAt" searchParams={searchParams} />
+              <Th label="Budżet" field="budgetFrom" searchParams={sp} />
+              <Th label="Status" field="status" searchParams={sp} />
+              <Th label="Utworzono" field="createdAt" searchParams={sp} />
+              <Th label="Wygasa" field="expiresAt" searchParams={sp} />
               <th className="px-3 py-2">Akcje</th>
             </tr>
           </thead>
@@ -127,7 +128,7 @@ export default async function AdminClientAdsPage({
         </table>
       </div>
 
-      <Pagination basePath="/admin/client-ads" searchParams={searchParams} page={page} totalPages={totalPages} />
+      <Pagination basePath="/admin/client-ads" searchParams={sp} page={page} totalPages={totalPages} />
     </div>
   );
 }

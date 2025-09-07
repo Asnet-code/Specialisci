@@ -5,13 +5,14 @@ import { createCityAction, geocodeCityByNameAction, updateCityCoordsAction } fro
 export default async function AdminCitiesPage({
   searchParams,
 }: {
-  searchParams: { q?: string; sort?: string; dir?: "asc" | "desc" };
+  searchParams: Promise<{ q?: string; sort?: string; dir?: "asc" | "desc" }>;
 }) {
   await requireAdmin();
 
-  const q = (searchParams?.q ?? "").trim();
-  const sort = (searchParams?.sort ?? "name") as "name" | "slug";
-  const dir = (searchParams?.dir ?? "asc") as "asc" | "desc";
+  const sp = await searchParams;
+  const q = (sp?.q ?? "").trim();
+  const sort = (sp?.sort ?? "name") as "name" | "slug";
+  const dir = (sp?.dir ?? "asc") as "asc" | "desc";
 
   const cities = await prisma.city.findMany({
     where: q
@@ -64,8 +65,8 @@ export default async function AdminCitiesPage({
           <thead className="bg-white/5">
             <tr className="text-left">
               <th className="px-3 py-2">#</th>
-              <Th label="Nazwa" field="name" searchParams={searchParams} />
-              <Th label="Slug" field="slug" searchParams={searchParams} />
+              <Th label="Nazwa" field="name" searchParams={sp} />
+              <Th label="Slug" field="slug" searchParams={sp} />
               <th className="px-3 py-2">Lat</th>
               <th className="px-3 py-2">Lng</th>
               <th className="px-3 py-2">Akcje</th>

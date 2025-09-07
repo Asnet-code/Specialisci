@@ -9,13 +9,14 @@ import {
 export default async function AdminCertificationsPage({
   searchParams,
 }: {
-  searchParams: { q?: string; sort?: string; dir?: "asc" | "desc" };
+  searchParams: Promise<{ q?: string; sort?: string; dir?: "asc" | "desc" }>;
 }) {
   await requireAdmin();
 
-  const q = (searchParams?.q ?? "").trim();
-  const sort = (searchParams?.sort ?? "displayOrder") as "displayOrder" | "name" | "isActive";
-  const dir = (searchParams?.dir ?? "asc") as "asc" | "desc";
+  const sp = await searchParams;
+  const q = (sp?.q ?? "").trim();
+  const sort = (sp?.sort ?? "displayOrder") as "displayOrder" | "name" | "isActive";
+  const dir = (sp?.dir ?? "asc") as "asc" | "desc";
 
   const items = await prisma.certification.findMany({
     where: q
@@ -62,10 +63,10 @@ export default async function AdminCertificationsPage({
           <thead className="bg-white/5">
             <tr className="text-left">
               <th className="px-3 py-2">#</th>
-              <Th label="Nazwa" field="name" searchParams={searchParams} />
+              <Th label="Nazwa" field="name" searchParams={sp} />
               <th className="px-3 py-2">Slug</th>
-              <Th label="Kolejność" field="displayOrder" searchParams={searchParams} />
-              <Th label="Aktywne" field="isActive" searchParams={searchParams} />
+              <Th label="Kolejność" field="displayOrder" searchParams={sp} />
+              <Th label="Aktywne" field="isActive" searchParams={sp} />
               <th className="px-3 py-2">Akcje</th>
             </tr>
           </thead>

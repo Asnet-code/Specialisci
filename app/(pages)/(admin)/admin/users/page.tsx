@@ -5,17 +5,18 @@ import { createUserAction, toggleUserSuspensionAction, updateUserRoleAction } fr
 export default async function AdminUsersPage({
   searchParams,
 }: {
-  searchParams: { q?: string; sort?: string; dir?: "asc" | "desc" };
+  searchParams: Promise<{ q?: string; sort?: string; dir?: "asc" | "desc" }>;
 }) {
   await requireAdmin();
 
-  const q = (searchParams?.q ?? "").trim();
-  const sort = (searchParams?.sort ?? "createdAt") as
+  const sp = await searchParams;
+  const q = (sp?.q ?? "").trim();
+  const sort = (sp?.sort ?? "createdAt") as
     | "createdAt"
     | "email"
     | "role"
     | "status";
-  const dir = (searchParams?.dir ?? "desc") as "asc" | "desc";
+  const dir = (sp?.dir ?? "desc") as "asc" | "desc";
 
   const users = await prisma.user.findMany({
     where: q
@@ -50,11 +51,11 @@ export default async function AdminUsersPage({
         <table className="w-full text-sm">
           <thead className="bg-white/5">
             <tr className="text-left">
-              <Th label="E-mail" field="email" searchParams={searchParams} />
+              <Th label="E-mail" field="email" searchParams={sp} />
               <Th label="Imię i nazwisko" />
-              <Th label="Rola" field="role" searchParams={searchParams} />
-              <Th label="Status" field="status" searchParams={searchParams} />
-              <Th label="Utworzono" field="createdAt" searchParams={searchParams} />
+              <Th label="Rola" field="role" searchParams={sp} />
+              <Th label="Status" field="status" searchParams={sp} />
+              <Th label="Utworzono" field="createdAt" searchParams={sp} />
               <th className="px-3 py-2">Akcje</th>
             </tr>
           </thead>
