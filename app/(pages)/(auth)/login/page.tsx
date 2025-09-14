@@ -1,3 +1,4 @@
+// app/login/page.tsx
 "use client";
 
 import { useState } from "react";
@@ -29,7 +30,6 @@ export default function LoginPage() {
       password,
       redirect: false,
     });
-
     if (res?.error) {
       setErr("Zły e-mail lub hasło.");
       setLoading(false);
@@ -82,16 +82,20 @@ export default function LoginPage() {
           >
             {loading ? "Logowanie..." : "Zaloguj się"}
           </button>
-
+          {/* 
           <div className="text-center">
             <button
               type="button"
-              onClick={() => signIn("google", { callbackUrl: "/" })}
+              onClick={() =>
+                signIn("google", {
+                  callbackUrl: "/api/oauth/finalize?role=CLIENT",
+                })
+              }
               className="mt-2 w-full rounded-xl border border-white/20 bg-white/5 text-white py-2 hover:bg-white/10"
             >
               Kontynuuj z Google
             </button>
-          </div>
+          </div> */}
 
           <p className="text-center text-sm text-neutral-400 pt-2">
             Nie masz konta?{" "}
